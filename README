@@ -1,0 +1,18 @@
+Y86 Processor Implementation for the Altera DE2-115
+
+The original version of this code comes from the book "Computer Systems: A
+Programmer's Perspective (2o. Edition)", which is copyrighted by the authors
+Randal E. Bryant and David R O'Hallaron.
+
+The adaptation for the Altera DE2-115 FPGA along with further extensions
+are authored by Leandro T. C. Melo with contributions by Jeferson Chaves.
+No warranties of any kind given.
+
+The overall design of the processor is pretty much the same. However, the
+Fetch and Memory stages needed to be completely re-written and a few other
+parts adjusted. This is because the SRAM component from the DE2-115 do not
+satisfy the requirements of the original implementation, which are too
+strong: It assumes a memory component with 8 banks, no alignment
+restrictions, possibility of simultaneous read of instructions and data,
+and the ability to entirely fetch the 48 bits of maximum instruction
+length at once.
