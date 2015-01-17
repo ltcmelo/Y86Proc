@@ -646,6 +646,77 @@ module Test;
             Byte_Addr = Byte_Addr + 4;
         end
 
+        // ----- Test Fig. 4.7 -----
+        cleanMem;
+        #10 Mode = 2'h1;
+        #10 Mode = 2'h0; // Reset
+        sram.MEM[0] = 16'h30f4;
+        sram.MEM[1] = 16'h0001;
+        sram.MEM[2] = 16'h0000;
+        sram.MEM[3] = 16'h30f5;
+        sram.MEM[4] = 16'h0001;
+        sram.MEM[5] = 16'h0000;
+        sram.MEM[6] = 16'h8024;
+        sram.MEM[7] = 16'h0000;
+        sram.MEM[8] = 16'h0000;
+        sram.MEM[9] = 16'h0000;
+        sram.MEM[10] = 16'h0d00;
+        sram.MEM[11] = 16'h0000;
+        sram.MEM[12] = 16'hc000;
+        sram.MEM[13] = 16'h0000;
+        sram.MEM[14] = 16'h000b;
+        sram.MEM[15] = 16'h0000;
+        sram.MEM[16] = 16'h00a0;
+        sram.MEM[17] = 16'h0000;
+        sram.MEM[18] = 16'ha05f;
+        sram.MEM[19] = 16'h2045;
+        sram.MEM[20] = 16'h30f0;
+        sram.MEM[21] = 16'h0400;
+        sram.MEM[22] = 16'h0000;
+        sram.MEM[23] = 16'ha00f;
+        sram.MEM[24] = 16'h30f2;
+        sram.MEM[25] = 16'h1400;
+        sram.MEM[26] = 16'h0000;
+        sram.MEM[27] = 16'ha02f;
+        sram.MEM[28] = 16'h8042;
+        sram.MEM[29] = 16'h0000;
+        sram.MEM[30] = 16'h0020;
+        sram.MEM[31] = 16'h54b0;
+        sram.MEM[32] = 16'h5f90;
+        sram.MEM[33] = 16'ha05f;
+        sram.MEM[34] = 16'h2045;
+        sram.MEM[35] = 16'h5015;
+        sram.MEM[36] = 16'h0800;
+        sram.MEM[37] = 16'h0000;
+        sram.MEM[38] = 16'h5025;
+        sram.MEM[39] = 16'h0c00;
+        sram.MEM[40] = 16'h0000;
+        sram.MEM[41] = 16'h6300;
+        sram.MEM[42] = 16'h6222;
+        sram.MEM[43] = 16'h7378;
+        sram.MEM[44] = 16'h0000;
+        sram.MEM[45] = 16'h0050;
+        sram.MEM[46] = 16'h6100;
+        sram.MEM[47] = 16'h0000;
+        sram.MEM[48] = 16'h0060;
+        sram.MEM[49] = 16'h6030;
+        sram.MEM[50] = 16'hf304;
+        sram.MEM[51] = 16'h0000;
+        sram.MEM[52] = 16'h0060;
+        sram.MEM[53] = 16'h3130;
+        sram.MEM[54] = 16'hf3ff;
+        sram.MEM[55] = 16'hffff;
+        sram.MEM[56] = 16'hff60;
+        sram.MEM[57] = 16'h3274;
+        sram.MEM[58] = 16'h5b00;
+        sram.MEM[59] = 16'h0000;
+        sram.MEM[60] = 16'h2054;
+        sram.MEM[61] = 16'hb05f;
+        sram.MEM[62] = 16'h9090;
+        sram.MEM[63] = 16'h0000;
+        #10000
+        printRegs;
+
 
         $display("!!! Tests finished successfully !!!");
         $finish;
@@ -656,6 +727,21 @@ module Test;
              SRAM_ADDR, SRAM_DQ, SRAM_WE_N, SRAM_OE_N, SRAM_UB_N, SRAM_LB_N, SRAM_CE_N,
              EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI);
    SRAM sram(SRAM_ADDR[20:1], SRAM_DQ, ~SRAM_WE_N, ~SRAM_OE_N, SRAM_UB_N, SRAM_LB_N, SRAM_CE_N);
+
+   task printRegs;
+      begin
+         $display("%%eax: 0x%x", EAX);
+         $display("%%ecx: 0x%x", ECX);
+         $display("%%edx: 0x%x", EDX);
+         $display("%%ebx: 0x%x", EBX);
+         $display("%%esp: 0x%x", ESP);
+         $display("%%ebp: 0x%x", EBP);
+         $display("%%esi: 0x%x", ESI);
+         $display("%%edi: 0x%x", EDI);
+         $display("top of stack: 0x%x%x", sram.MEM[ESP[20:1]], sram.MEM[ESP[20:1]+1]);
+         $display("base pointer: 0x%x%x", sram.MEM[EBP[20:1]], sram.MEM[EBP[20:1]+1]);
+      end
+   endtask
 
    task checkReg;
       input [31:0] actual, expected, checkID;
