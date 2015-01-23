@@ -16,3 +16,8 @@ strong: It assumes a memory component with 8 banks, no alignment
 restrictions, possibility of simultaneous read of instructions and data,
 and the ability to entirely fetch the 48 bits of maximum instruction
 length at once.
+
+yas - There is a patch available that generates Verilog code in the format
+required by the DE2-115 board and the extensions I implemented. Notice,
+however, that the simulator might no longer work once the patch is applied,
+since I did not bother about that and was only interested on the assembler.

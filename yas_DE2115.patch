@@ -1,0 +1,92 @@
+Only in misc_de2/: hcl2c
+diff misc/isa.c misc_de2/isa.c
+0a1,4
+> #ifndef DE2
+> #define DE2
+> #endif
+> 
+81a86,92
+>     {"mull",   HPACK(I_ALU, A_MUL), 2, R_ARG, 1, 1, R_ARG, 1, 0 },
+>     {"orl",    HPACK(I_ALU, A_OR), 2, R_ARG, 1, 1, R_ARG, 1, 0 },
+>     {"iaddl",  HPACK(I_IRALU, A_ADD), 6, I_ARG, 2, 4, R_ARG, 1, 0 },
+>     {"isubl",  HPACK(I_IRALU, A_SUB), 6, I_ARG, 2, 4, R_ARG, 1, 0 },
+>     {"imull",  HPACK(I_IRALU, A_MUL), 6, I_ARG, 2, 4, R_ARG, 1, 0 },
+>     {"sall",   HPACK(I_IRALU, A_SAL), 6, I_ARG, 2, 4, R_ARG, 1, 0 },
+>     {"sarl",   HPACK(I_IRALU, A_SAR), 6, I_ARG, 2, 4, R_ARG, 1, 0 },
+94c105
+<     {"iaddl",  HPACK(I_IADDL, F_NONE), 6, I_ARG, 2, 4, R_ARG, 1, 0 },
+---
+>     {"nonono", HPACK(I_IADDL, F_NONE), 6, I_ARG, 2, 4, R_ARG, 1, 0 },
+diff misc/isa.h misc_de2/isa.h
+26,28c26,39
+< typedef enum { I_HALT, I_NOP, I_RRMOVL, I_IRMOVL, I_RMMOVL, I_MRMOVL,
+< 	       I_ALU, I_JMP, I_CALL, I_RET, I_PUSHL, I_POPL,
+< 	       I_IADDL, I_LEAVE, I_POP2 } itype_t;
+---
+> typedef enum {
+> #ifdef DE2
+>     I_NOP, I_HALT,
+> #else
+>     I_HALT, I_NOP,
+> #endif
+>     I_RRMOVL, I_IRMOVL, I_RMMOVL, I_MRMOVL,
+>     I_ALU, I_JMP, I_CALL, I_RET, I_PUSHL, I_POPL,
+> #ifdef DE2
+>     I_IRALU,
+> #endif
+>     I_IADDL, I_LEAVE, I_POP2
+> } itype_t;
+> 
+31c42,46
+< typedef enum { A_ADD, A_SUB, A_AND, A_XOR, A_NONE } alu_t;
+---
+> typedef enum {
+>     A_ADD, A_SUB, A_AND, A_XOR,
+>     A_MUL, A_SAL, A_SAR, A_OR, A_NOT,
+>     A_NONE
+> } alu_t;
+Only in misc_de2/: isa.o
+Only in misc_de2/: yas
+diff misc/yas-grammar.lex misc_de2/yas-grammar.lex
+5c5
+< Instr         rrmovl|cmovle|cmovl|cmove|cmovne|cmovge|cmovg|rmmovl|mrmovl|irmovl|addl|subl|andl|xorl|jmp|jle|jl|je|jne|jge|jg|call|ret|pushl|popl|"."byte|"."word|"."long|"."pos|"."align|halt|nop|iaddl|leave
+---
+> Instr         rrmovl|cmovle|cmovl|cmove|cmovne|cmovge|cmovg|rmmovl|mrmovl|irmovl|addl|subl|andl|xorl|jmp|jle|jl|je|jne|jge|jg|call|ret|pushl|popl|"."byte|"."word|"."long|"."pos|"."align|halt|nop|iaddl|leave|iaddl|isubl|mull|imull|sall|sarl|orl
+Only in misc_de2/: yas-grammar.o
+diff misc/yas.c misc_de2/yas.c
+5a6,13
+> #ifndef BIG_MEM
+> #define BIG_MEM
+> #endif
+> 
+> #ifndef DE2
+> #define DE2
+> #endif
+> 
+58a67,70
+> #ifdef DE2
+> int prevpos = 0;   /* Previously processed position */
+> char pendcode = 0; /* Pending code from the previous position */
+> #endif
+177a190,205
+> #ifdef DE2
+>             i = 0;
+>             if (prevpos && bcount) {
+>                 fprintf(out, "    sram.MEM[%d] = 16'h%.2x%.2x;\n",
+>                         prevpos >> 1, pendcode & 0xFF, code[i] & 0xFF);
+>                 prevpos = 0;
+>                 ++i;
+>             }
+>             for (; tcount && i + 1 < bcount; i += 2)
+>                 fprintf(out, "    sram.MEM[%d] = 16'h%.2x%.2x;\n",
+>                        (pos+i) >> 1, code[i] & 0xFF, code[i+1] & 0xFF);
+>             if (i < bcount) {
+>                 pendcode = code[i];
+>                 prevpos = pos + bcount;
+>             }
+> #else
+184a213
+> #endif
+Only in misc_de2/: yas.o
+Only in misc_de2/: yis
+Only in misc_de2/: yis.o
