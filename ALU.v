@@ -23,8 +23,8 @@ module ALU(valA, valB, fun, result, flags);
        4'h2: result = valB & valA;  //AND
        4'h3: result = valB ^ valA;  //XOR
        4'h4: result = valB * valA;  //MUL
-       4'h6: result = valB << valA; //SHL
-       4'h7: result = valB >> valA; //SHR
+       4'h6: result = valB << valA; //SAL
+       4'h7: result = valB >> valA; //SAR
        4'h8: result = valB | valA;  //OR
        4'h9: result = ~valB;        //NOT
        default: result = valB;

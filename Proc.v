@@ -42,7 +42,7 @@ module Proc(Mode, Clock, Status,
 
    /////////////// Constants ///////////////
 
-   // Modos:
+   // Modes:
    //  1 - Normal execution
    //  2 - Reset
    //  3,4 - Reserved
@@ -50,18 +50,19 @@ module Proc(Mode, Clock, Status,
    parameter MODE_RESET = 3'b1;
 
    // Instructions
-   parameter IHALT   = 4'h1;
-   parameter INOP    = 4'h0;
-   parameter IRRMOVL = 4'h2;
-   parameter IIRMOVL = 4'h3;
-   parameter IRMMOVL = 4'h4;
-   parameter IMRMOVL = 4'h5;
-   parameter IOPL    = 4'h6;
-   parameter IJXX    = 4'h7;
-   parameter ICALL   = 4'h8;
-   parameter IRET    = 4'h9;
-   parameter IPUSHL  = 4'hA;
-   parameter IPOPL   = 4'hB;
+   parameter INOP     = 4'h0; // This implementation has NOP as 0 (different from the book)!
+   parameter IHALT    = 4'h1;
+   parameter IRRMOVL  = 4'h2;
+   parameter IIRMOVL  = 4'h3;
+   parameter IRMMOVL  = 4'h4;
+   parameter IMRMOVL  = 4'h5;
+   parameter IOPL     = 4'h6;
+   parameter IJXX     = 4'h7;
+   parameter ICALL    = 4'h8;
+   parameter IRET     = 4'h9;
+   parameter IPUSHL   = 4'hA;
+   parameter IPOPL    = 4'hB;
+   parameter IIROPL   = 4'hC;
 
    // ALU
    parameter ALU_ADD = 4'h0;
@@ -127,18 +128,18 @@ module Proc(Mode, Clock, Status,
    wire [3:0] DEC_Ra;
    wire [3:0] DEC_Rb;
    wire [3:0] Dec_SrcA;
-   wire [31:0] Dec_ValRa;
-   wire [31:0] Dec_ValA;
    wire [3:0] Dec_SrcB;
-   wire [31:0] Dec_ValRb;
+   wire [31:0] Dec_ValA;
    wire [31:0] Dec_ValB;
+   wire [31:0] Dec_ValRa;
+   wire [31:0] Dec_ValRb;
    wire [3:0] Dec_DstCalc;
    wire [3:0] Dec_DstMem;
 
    // Execute Stage
    wire Exec_Bubble;
    wire Exec_Stall;
-   wire [2:0] EXEC_Status;
+   wire [2:0] Exec_Status, EXEC_Status;
    wire [31:0] EXEC_PC;
    wire [3:0] EXEC_OpCode;
    wire [3:0] EXEC_Func;
@@ -317,7 +318,8 @@ module Proc(Mode, Clock, Status,
                                 Fetch_ValidByteCount + 3'h1 :
                             (Fetch_ValidByteCount == 4 & SRAM_LoHi & ~HasRegIds) ?
                                 Fetch_ValidByteCount + 3'h1 :
-                            (Fetch_ValidByteCount == 5 & SRAM_LoHi) ? Fetch_ValidByteCount + 3'h1 :
+                            (Fetch_ValidByteCount == 5 & SRAM_LoHi) ?
+                                Fetch_ValidByteCount + 3'h1 :
                             (~SRAM_LoHi) ? Fetch_ValidByteCount + 3'h1 : Fetch_ValidByteCount + 3'h2);
 
    // Track whether the instruction fetching is complete.
@@ -325,7 +327,8 @@ module Proc(Mode, Clock, Status,
                            (Fetch_OpCode == IRRMOVL) ? Fetch_ByteCount == 3'h2 :
                            (Fetch_OpCode == IIRMOVL |
                             Fetch_OpCode == IRMMOVL |
-                            Fetch_OpCode == IMRMOVL ) ? Fetch_ByteCount == 3'h6 :
+                            Fetch_OpCode == IMRMOVL |
+                            Fetch_OpCode == IIROPL) ? Fetch_ByteCount == 3'h6 :
                            (Fetch_OpCode == IOPL) ? Fetch_ByteCount == 3'h2 :
                            (Fetch_OpCode == IJXX | Fetch_OpCode == ICALL) ? Fetch_ByteCount == 3'h5 :
                            (Fetch_OpCode == IRET) ? Fetch_ByteCount == 3'h1 :
@@ -334,8 +337,8 @@ module Proc(Mode, Clock, Status,
 
    // We cannot simply rely on byte counting for the instructions, since we
    // need an "artificial" reset upon a Jump or Ret.
-   assign Fetch_ValidByteCount = ((MEM_OpCode == IJXX ) & ~MEM_Condition) |
-                                 WRITE_OpCode == IRET ? 0 : FETCH_ByteCount;
+   assign Fetch_ValidByteCount = ((MEM_OpCode == IJXX ) & ~MEM_Condition) | WRITE_OpCode == IRET ?
+                                 0 : FETCH_ByteCount;
 
    // PC computation is critical, we not only need to remember about jumping
    // but also consider the instructions are not read at once.
@@ -355,7 +358,8 @@ module Proc(Mode, Clock, Status,
                        Fetch_OpCode == ICALL |
                        Fetch_OpCode == IRET |
                        Fetch_OpCode == IPUSHL |
-                       Fetch_OpCode == IPOPL;
+                       Fetch_OpCode == IPOPL |
+                       Fetch_OpCode == IIROPL;
 
    assign HasRegIds = Fetch_OpCode == IRRMOVL |
                       Fetch_OpCode == IOPL |
@@ -363,11 +367,13 @@ module Proc(Mode, Clock, Status,
                       Fetch_OpCode == IPOPL |
                       Fetch_OpCode == IIRMOVL |
                       Fetch_OpCode == IRMMOVL |
-                      Fetch_OpCode == IMRMOVL;
+                      Fetch_OpCode == IMRMOVL |
+                      Fetch_OpCode == IIROPL;
 
    assign HasConst = Fetch_OpCode == IIRMOVL |
                      Fetch_OpCode == IRMMOVL |
                      Fetch_OpCode == IMRMOVL |
+                     Fetch_OpCode == IIROPL |
                      Fetch_OpCode == IJXX |
                      Fetch_OpCode == ICALL;
 
@@ -383,6 +389,14 @@ module Proc(Mode, Clock, Status,
 
    assign Fetch_SeqPC = (Fetch_ValidByteCount == 0) ?
                         (Fetch_PC + 1 + HasRegIds + 4 * HasConst) : FETCH_SeqPC;
+
+
+//   always @(Fetch_Complete, Fetch_OpCode)
+//   begin
+//      if (Fetch_Complete)
+//         $display("Current opcode 0x%0x (size: %0d) at %0d [status %0d]",
+//                  Fetch_OpCode, Fetch_ByteCount, Fetch_PC[20:1], Fetch_Status);
+//   end
 
 
    /////////////////////////////////////////////////////////////////////////////
@@ -403,6 +417,8 @@ module Proc(Mode, Clock, Status,
    Register #(4)  DEC_REG_Func(DEC_Func, Fetch_Func, ~Dec_Stall, Dec_Reset, NO_FUNC, Clock);
    Register #(4)  DEC_REG_Ra(DEC_Ra, Fetch_Ra, ~Dec_Stall, Dec_Reset, REG_INVALID, Clock);
    Register #(4)  DEC_REG_Rb(DEC_Rb, Fetch_Rb, ~Dec_Stall, Dec_Reset, REG_INVALID, Clock);
+   Register #(4)  DEC_REG_Rl(DEC_Rl, Fetch_Rl, ~Dec_Stall, Dec_Reset, REG_INVALID, Clock);
+   Register #(4)  DEC_REG_Ru(DEC_Ru, Fetch_Ru, ~Dec_Stall, Dec_Reset, REG_INVALID, Clock);
    Register #(32) DEC_REG_Const(DEC_Const,
                                 {Fetch_ConstHiHi, Fetch_ConstHi, Fetch_ConstLo, Fetch_ConstLoLo},
                                 ~Dec_Stall, Dec_Reset, 0, Clock);
@@ -416,7 +432,8 @@ module Proc(Mode, Clock, Status,
 
    assign Dec_SrcB = (DEC_OpCode == IRMMOVL |
                       DEC_OpCode == IMRMOVL |
-                      DEC_OpCode == IOPL) ? DEC_Rb :
+                      DEC_OpCode == IOPL |
+                      DEC_OpCode == IIROPL) ? DEC_Rb :
                      (DEC_OpCode == IPUSHL |
                       DEC_OpCode == IPOPL |
                       DEC_OpCode == ICALL |
@@ -424,13 +441,15 @@ module Proc(Mode, Clock, Status,
 
    assign Dec_DstCalc = (DEC_OpCode == IRRMOVL |
                          DEC_OpCode == IIRMOVL |
-                         DEC_OpCode == IOPL) ? DEC_Rb :
+                         DEC_OpCode == IOPL |
+                         DEC_OpCode == IIROPL) ? DEC_Rb :
                         (DEC_OpCode == IPUSHL |
                          DEC_OpCode == IPOPL |
                          DEC_OpCode == ICALL |
                          DEC_OpCode == IRET) ? REG_ESP : REG_INVALID;
 
-   assign Dec_DstMem = (DEC_OpCode == IMRMOVL | DEC_OpCode == IPOPL) ? DEC_Ra : REG_INVALID;
+   assign Dec_DstMem = (DEC_OpCode == IMRMOVL |
+                        DEC_OpCode == IPOPL) ? DEC_Ra : REG_INVALID;
 
    assign Dec_ValA = (DEC_OpCode == ICALL | DEC_OpCode == IJXX ) ? DEC_SeqPC :
                      (Dec_SrcA == Exec_DstCalc) ? Exec_ValCalc :
@@ -446,26 +465,6 @@ module Proc(Mode, Clock, Status,
                      (Dec_SrcB == WRITE_DstMem) ? WRITE_ValMem :
                      (Dec_SrcB == WRITE_DstCalc) ? WRITE_ValCalc :
                      Dec_ValRb;
-
-   assign AluA = (EXEC_OpCode == IRRMOVL | EXEC_OpCode == IOPL) ? EXEC_ValA :
-                 (EXEC_OpCode == IIRMOVL |
-                  EXEC_OpCode == IRMMOVL |
-                  EXEC_OpCode == IMRMOVL) ? EXEC_Const :
-                 (EXEC_OpCode == ICALL | EXEC_OpCode == IPUSHL) ? -4 :
-                 (EXEC_OpCode == IRET | EXEC_OpCode == IPOPL) ? 4 :
-                 0;
-
-   assign AluB = (EXEC_OpCode == IRMMOVL |
-                  EXEC_OpCode == IMRMOVL |
-                  EXEC_OpCode == IOPL |
-                  EXEC_OpCode == ICALL |
-                  EXEC_OpCode == IPUSHL |
-                  EXEC_OpCode == IRET |
-                  EXEC_OpCode == IPOPL) ? EXEC_ValB :
-                 (EXEC_OpCode == IRRMOVL |
-                  EXEC_OpCode == IIRMOVL) ? 0 :
-                 0;
-
 
    /////////////////////////////////////////////////////////////////////////////
    //                                Execute
@@ -487,9 +486,32 @@ module Proc(Mode, Clock, Status,
    Register #(4)  EXEC_REG_SrcA(EXEC_SrcA, Dec_SrcA, ~Exec_Stall, Exec_Reset, REG_INVALID, Clock);
    Register #(4)  EXEC_REG_SrcB(EXEC_SrcB, Dec_SrcB, ~Exec_Stall, Exec_Reset, REG_INVALID, Clock);
 
-   assign AluFunc = (EXEC_OpCode == IOPL) ? EXEC_Func : ALU_ADD;
+   assign AluA = (EXEC_OpCode == IRRMOVL | EXEC_OpCode == IOPL) ? EXEC_ValA :
+                 (EXEC_OpCode == IIRMOVL |
+                  EXEC_OpCode == IRMMOVL |
+                  EXEC_OpCode == IMRMOVL |
+                  EXEC_OpCode == IIROPL) ? EXEC_Const :
+                 (EXEC_OpCode == ICALL | EXEC_OpCode == IPUSHL) ? -4 :
+                 (EXEC_OpCode == IRET | EXEC_OpCode == IPOPL) ? 4 :
+                 0;
 
-   assign SetCC = (EXEC_OpCode == IOPL &
+   assign AluB = (EXEC_OpCode == IRMMOVL |
+                  EXEC_OpCode == IMRMOVL |
+                  EXEC_OpCode == IOPL |
+                  EXEC_OpCode == ICALL |
+                  EXEC_OpCode == IPUSHL |
+                  EXEC_OpCode == IRET |
+                  EXEC_OpCode == IPOPL |
+                  EXEC_OpCode == IIROPL) ? EXEC_ValB :
+                 (EXEC_OpCode == IRRMOVL |
+                  EXEC_OpCode == IIRMOVL) ? 0 :
+                 0;
+
+   assign AluFunc = (EXEC_OpCode == IOPL |
+                     EXEC_OpCode == IIROPL) ? EXEC_Func : ALU_ADD;
+
+   assign SetCC = ((EXEC_OpCode == IOPL |
+                    EXEC_OpCode == IIROPL) &
                    ~(Mem_Status == STATUS_ADDRERR |
                      Mem_Status == STATUS_INSTERR |
                      Mem_Status == STATUS_HALT) &
@@ -500,6 +522,8 @@ module Proc(Mode, Clock, Status,
    assign Exec_ValA = EXEC_ValA;
 
    assign Exec_DstCalc = ((EXEC_OpCode == IRRMOVL) & ~Exec_Condition) ? REG_INVALID : EXEC_DstCalc;
+
+   assign Exec_Status = EXEC_Status;
 
 
    /////////////////////////////////////////////////////////////////////////////
@@ -529,8 +553,10 @@ module Proc(Mode, Clock, Status,
    Register #(32) MEM_REG_ValMem(MEM_ValMem, Mem_ValMem, ~Mem_Stall, Mem_Reset, 0, Clock);
 
    // Relay for the second Memory iteration.
-   assign Mem_MakeRelay = Mem_UnifiedByteCount == 2 | MEM_UnifiedByteCount == 3;
-   assign Mem_Status = Mem_MakeRelay ? MEM_Status : EXEC_Status;
+   assign Mem_MakeRelay = Mem_UnifiedByteCount == 1 |
+                          Mem_UnifiedByteCount == 2 |
+                          Mem_UnifiedByteCount == 3;
+   assign Mem_Status = Mem_MakeRelay ? MEM_Status : Exec_Status;
    assign Mem_PC = Mem_MakeRelay ? MEM_PC : EXEC_PC;
    assign Mem_OpCode = Mem_MakeRelay ? MEM_OpCode : EXEC_OpCode;
    assign Mem_Func = Mem_MakeRelay ? MEM_Func : EXEC_Func;
@@ -542,16 +568,20 @@ module Proc(Mode, Clock, Status,
 
    assign Mem_Addr = (MEM_UnifiedByteCount == 0) ?
                      ((MEM_OpCode == IRMMOVL |
+                       MEM_OpCode == IMRMOVL |
                        MEM_OpCode == IPUSHL |
-                       MEM_OpCode == ICALL |
-                       MEM_OpCode == IMRMOVL) ? MEM_ValCalc :
+                       MEM_OpCode == ICALL ) ? MEM_ValCalc :
                       (MEM_OpCode == IPOPL |
                        MEM_OpCode == IRET) ? MEM_ValA :
                       0) :
                       MEM_Addr + MEM_UnifiedByteCount;
 
-   assign Mem_Read  = (MEM_OpCode == IMRMOVL | MEM_OpCode == IPOPL | MEM_OpCode == IRET);
-   assign Mem_Write = (MEM_OpCode == IRMMOVL | MEM_OpCode == IPUSHL | MEM_OpCode == ICALL);
+   assign Mem_Read  = (MEM_OpCode == IMRMOVL |
+                       MEM_OpCode == IPOPL |
+                       MEM_OpCode == IRET);
+   assign Mem_Write = (MEM_OpCode == IRMMOVL |
+                       MEM_OpCode == IPUSHL |
+                       MEM_OpCode == ICALL);
    assign Mem_Busy = Mem_Read | Mem_Write;
 
    assign Mem_OutMem = Mem_Read ? SRAM_Data : 16'bzzzzzzzzzzzzzzzz;
